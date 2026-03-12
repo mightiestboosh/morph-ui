@@ -2,14 +2,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { db, schema } from '../db/index.js';
 import { eq, asc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { toolDefinitions } from './tools/index.js';
+import { getAllTools, userTools } from './tools/index.js';
 import { getSystemPrompt } from './system-prompt.js';
 import { processRenderUI } from './tools/render-ui.js';
-import { handleSearchWeb } from './tools/search-web.js';
-import { handleBrowseWebsite, handleDispatchAgents } from './tools/browse-web.js';
 import { handleGetLocation } from './tools/get-location.js';
 
-const MAX_ITERATIONS = 15;
+const MAX_ITERATIONS = 25;
 
 interface ChatAgentOptions {
   conversationId: string;
@@ -64,15 +62,14 @@ export class ChatAgent {
 
         const stream = this.client.messages.stream({
           model: this.model,
-          max_tokens: 8192,
+          max_tokens: 16384,
           system: getSystemPrompt(),
-          tools: toolDefinitions,
+          tools: getAllTools(this.model),
           messages,
         });
 
         // Collect text deltas and stream them to the client
         let assistantText = '';
-        const contentBlocks: Anthropic.ContentBlock[] = [];
 
         stream.on('text', (text) => {
           assistantText += text;
@@ -80,35 +77,35 @@ export class ChatAgent {
         });
 
         const response = await stream.finalMessage();
-        contentBlocks.push(...response.content);
-
-        // Extract full text from the response
-        for (const block of response.content) {
-          if (block.type === 'text') {
-            // Text already collected via stream event
-          }
-        }
 
         fullContent = assistantText;
 
-        // Check if we need to handle tool use
-        const toolUseBlocks = response.content.filter(
-          (block): block is Anthropic.ContentBlockParam & { type: 'tool_use'; id: string; name: string; input: any } =>
-            block.type === 'tool_use'
-        );
-
-        if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
-          // No tool calls — we're done
+        // Check stop reason
+        if (response.stop_reason === 'end_turn') {
+          // Done — no more tool calls
           break;
         }
 
-        // Process tool calls
-        const toolResults: Anthropic.MessageParam = {
-          role: 'user',
-          content: [],
-        };
+        if (response.stop_reason === 'pause_turn') {
+          // Server-side tool hit iteration limit — re-send to continue
+          messages.push({ role: 'assistant', content: response.content as any });
+          continue;
+        }
 
-        for (const toolBlock of toolUseBlocks) {
+        // Find user-defined tool_use blocks (render_ui, get_location)
+        const userToolUseBlocks = response.content.filter(
+          (block) => block.type === 'tool_use'
+        ) as Anthropic.ToolUseBlock[];
+
+        if (userToolUseBlocks.length === 0) {
+          // No user tools — might be only server tools or done
+          break;
+        }
+
+        // Process user-defined tool calls
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+        for (const toolBlock of userToolUseBlocks) {
           const { id, name, input } = toolBlock;
 
           toolCalls.push({ id, name, input });
@@ -122,37 +119,6 @@ export class ChatAgent {
                 surfaces.push(surface);
                 this.onEvent('ui_surface', surface);
                 result = { success: true, surfaceId: surface.surfaceId };
-                break;
-              }
-
-              case 'search_web': {
-                result = await handleSearchWeb(input as any);
-                break;
-              }
-
-              case 'browse_website': {
-                this.onEvent('agent_status', {
-                  agent_label: input.agent_label || 'Browser Agent',
-                  status: 'starting',
-                  url: input.url,
-                });
-                result = await handleBrowseWebsite(input as any, (progress) => {
-                  this.onEvent('agent_status', {
-                    agent_label: input.agent_label || 'Browser Agent',
-                    ...progress,
-                  });
-                });
-                this.onEvent('agent_status', {
-                  agent_label: input.agent_label || 'Browser Agent',
-                  status: 'completed',
-                });
-                break;
-              }
-
-              case 'dispatch_agents': {
-                result = await handleDispatchAgents(input as any, (progress) => {
-                  this.onEvent('agent_status', progress);
-                });
                 break;
               }
 
@@ -170,7 +136,7 @@ export class ChatAgent {
             result = { error: err.message || 'Tool execution failed' };
           }
 
-          (toolResults.content as Anthropic.ToolResultBlockParam[]).push({
+          toolResults.push({
             type: 'tool_result',
             tool_use_id: id,
             content: typeof result === 'string' ? result : JSON.stringify(result),
@@ -179,7 +145,7 @@ export class ChatAgent {
 
         // Add assistant response and tool results to messages for next iteration
         messages.push({ role: 'assistant', content: response.content as any });
-        messages.push(toolResults);
+        messages.push({ role: 'user', content: toolResults });
       }
 
       return { content: fullContent, surfaces, toolCalls };

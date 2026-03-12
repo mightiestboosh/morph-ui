@@ -11,16 +11,17 @@ interface SettingsModalProps {
 }
 
 const MODEL_OPTIONS = [
-  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
-  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.0 (legacy)' },
 ];
 
 export function SettingsModal({ open, onClose, settings, onUpdate }: SettingsModalProps) {
-  const [model, setModel] = useState(settings.model || 'claude-sonnet-4-20250514');
+  const [model, setModel] = useState(settings.model || 'claude-sonnet-4-6');
 
   useEffect(() => {
-    setModel(settings.model || 'claude-sonnet-4-20250514');
+    setModel(settings.model || 'claude-sonnet-4-6');
   }, [settings.model]);
 
   if (!open) return null;
@@ -33,15 +34,15 @@ export function SettingsModal({ open, onClose, settings, onUpdate }: SettingsMod
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-card rounded-xl shadow-xl w-full max-w-md p-6 mx-4">
+      <div className="relative bg-card rounded-2xl shadow-xl w-full max-w-md p-6 mx-4">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold">Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-muted transition-colors"
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             aria-label="Close settings"
           >
             <X className="w-5 h-5" />
@@ -50,13 +51,13 @@ export function SettingsModal({ open, onClose, settings, onUpdate }: SettingsMod
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Model</label>
+            <label className="block text-sm font-medium mb-2 text-foreground">Model</label>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
               className={cn(
-                'w-full rounded-lg border border-input bg-background px-3 py-2.5',
-                'text-sm focus:outline-none focus:ring-2 focus:ring-ring',
+                'w-full rounded-xl border border-input bg-background px-3 py-2.5',
+                'text-sm focus:outline-none focus:ring-2 focus:ring-ring/30',
                 'transition-shadow'
               )}
             >
@@ -73,7 +74,7 @@ export function SettingsModal({ open, onClose, settings, onUpdate }: SettingsMod
           <button
             onClick={onClose}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium',
+              'px-4 py-2 rounded-xl text-sm font-medium',
               'border border-border hover:bg-muted transition-colors'
             )}
           >
@@ -82,7 +83,7 @@ export function SettingsModal({ open, onClose, settings, onUpdate }: SettingsMod
           <button
             onClick={handleSave}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium',
+              'px-4 py-2 rounded-xl text-sm font-medium',
               'bg-primary text-primary-foreground hover:bg-primary-dark',
               'transition-colors'
             )}

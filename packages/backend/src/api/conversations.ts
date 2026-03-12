@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { db, schema } from '../db/index.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, gt, and } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -32,7 +32,14 @@ router.get('/:id', async (req: Request, res: Response) => {
     .where(eq(schema.messages.conversationId, id))
     .orderBy(schema.messages.createdAt);
 
-  res.json({ ...conversation, messages: msgs });
+  // Parse JSON fields for frontend consumption
+  const parsed = msgs.map((msg) => ({
+    ...msg,
+    a2uiSurfaces: msg.a2uiSurfaces ? JSON.parse(msg.a2uiSurfaces) : null,
+    toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : null,
+  }));
+
+  res.json({ ...conversation, messages: parsed });
 });
 
 // Create new conversation
@@ -74,6 +81,34 @@ router.patch('/:id', async (req: Request, res: Response) => {
     .update(schema.conversations)
     .set({ title, updatedAt: new Date().toISOString() })
     .where(eq(schema.conversations.id, id));
+
+  res.json({ ok: true });
+});
+
+// Revert conversation to a specific message (delete all messages after it)
+router.post('/:id/revert/:messageId', async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const messageId = req.params.messageId as string;
+
+  // Find the target message to get its createdAt
+  const target = await db.query.messages.findFirst({
+    where: eq(schema.messages.id, messageId),
+  });
+
+  if (!target) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  // Delete all messages in this conversation created after the target
+  await db
+    .delete(schema.messages)
+    .where(
+      and(
+        eq(schema.messages.conversationId, id),
+        gt(schema.messages.createdAt, target.createdAt),
+      ),
+    );
 
   res.json({ ok: true });
 });

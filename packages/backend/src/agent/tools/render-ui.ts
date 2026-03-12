@@ -52,7 +52,7 @@ export function processRenderUI(input: RenderUIInput) {
   const flatNodes = flattenTree(input.layout);
   return {
     surfaceId: input.surfaceId,
-    nodes: flatNodes,
-    tree: input.layout, // Also pass the tree for the frontend's recursive renderer
+    componentTree: input.layout, // The nested tree for the frontend's recursive renderer
+    nodes: flatNodes, // Flat adjacency list (A2UI format)
   };
 }

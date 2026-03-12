@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Settings, Trash2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MorphLogo } from '@/components/MorphLogo';
 import type { Conversation } from '@/hooks/useConversations';
 
 interface SidebarProps {
@@ -21,22 +22,27 @@ export function Sidebar({
   onOpenSettings,
 }: SidebarProps) {
   return (
-    <aside className="w-[280px] border-r border-border flex flex-col bg-muted/30">
+    <aside className="w-full h-full flex flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex items-center gap-2.5 px-4 py-4">
+        <MorphLogo size={28} />
+        <span className="text-xl font-bold tracking-tight text-sidebar-foreground">Morph</span>
+      </div>
       <div className="p-3">
         <button
           onClick={onCreate}
           className={cn(
-            'w-full flex items-center justify-center gap-2 px-4 py-2.5',
-            'rounded-lg bg-primary text-primary-foreground text-sm font-medium',
-            'hover:bg-primary-dark transition-colors'
+            'w-full flex items-center gap-2 px-3 py-2.5',
+            'rounded-lg text-sm font-medium',
+            'bg-sidebar-muted text-sidebar-foreground',
+            'hover:bg-sidebar-muted/80 transition-colors'
           )}
         >
           <Plus className="w-4 h-4" />
-          New Chat
+          New chat
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {conversations.map((conv) => (
           <ConversationItem
             key={conv.id}
@@ -47,18 +53,18 @@ export function Sidebar({
           />
         ))}
         {conversations.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center mt-8 px-4">
+          <p className="text-xs text-sidebar-muted-foreground text-center mt-8 px-4">
             No conversations yet
           </p>
         )}
       </div>
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-sidebar-border p-3">
         <button
           onClick={onOpenSettings}
           className={cn(
             'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
-            'text-muted-foreground hover:text-foreground hover:bg-muted',
+            'text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-muted',
             'transition-colors'
           )}
         >
@@ -86,16 +92,17 @@ function ConversationItem({
   return (
     <div
       className={cn(
-        'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer mb-0.5',
-        'transition-colors',
-        isActive ? 'bg-muted' : 'hover:bg-muted/60'
+        'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer',
+        'transition-colors text-sm',
+        isActive
+          ? 'bg-sidebar-muted text-sidebar-foreground'
+          : 'text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-muted/50'
       )}
       onClick={onSelect}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <MessageSquare className="w-4 h-4 text-muted-foreground shrink-0" />
-      <span className="flex-1 text-sm truncate">
+      <span className="flex-1 truncate">
         {conversation.title || 'Untitled'}
       </span>
       {hovered && (
@@ -104,7 +111,7 @@ function ConversationItem({
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+          className="p-1 rounded hover:bg-sidebar-muted text-sidebar-muted-foreground hover:text-destructive transition-colors"
           aria-label="Delete conversation"
         >
           <Trash2 className="w-3.5 h-3.5" />

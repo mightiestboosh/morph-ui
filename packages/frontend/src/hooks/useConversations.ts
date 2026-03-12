@@ -11,13 +11,34 @@ export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const refreshConversations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/conversations');
+      const data: Conversation[] = await res.json();
+      setConversations(data);
+    } catch (err) {
+      console.error('Failed to refresh conversations:', err);
+    }
+  }, []);
+
+  // Load on mount; auto-create a chat if none exist
   useEffect(() => {
     fetch('/api/conversations')
-      .then((res) => res.json())
-      .then((data: Conversation[]) => {
-        setConversations(data);
-        if (data.length > 0 && !activeId) {
-          setActiveId(data[0].id);
+      .then((r) => r.json())
+      .then(async (data: Conversation[]) => {
+        if (data.length === 0) {
+          // No conversations — create one automatically
+          const res = await fetch('/api/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const conv: Conversation = await res.json();
+          setConversations([conv]);
+          setActiveId(conv.id);
+        } else {
+          setConversations(data);
+          if (!activeId) setActiveId(data[0].id);
         }
       })
       .catch(console.error);
@@ -48,5 +69,11 @@ export function useConversations() {
     }
   }, []);
 
-  return { conversations, activeId, setActiveId, createConversation, deleteConversation };
+  const updateTitle = useCallback((id: string, title: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title } : c))
+    );
+  }, []);
+
+  return { conversations, activeId, setActiveId, createConversation, deleteConversation, refreshConversations, updateTitle };
 }

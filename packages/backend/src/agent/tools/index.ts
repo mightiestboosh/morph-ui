@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
-export const toolDefinitions: Anthropic.Tool[] = [
+// User-defined tools (we handle execution)
+export const userTools: Anthropic.Tool[] = [
   {
     name: 'render_ui',
     description:
@@ -21,71 +22,6 @@ export const toolDefinitions: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'search_web',
-    description: 'Search the web to find relevant websites for a task.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: { type: 'string', description: 'Search query' },
-        num_results: {
-          type: 'number',
-          description: 'Number of results to return (default 5)',
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'browse_website',
-    description:
-      'Dispatch a browser sub-agent to visit a website, interact with it, and extract structured data. Multiple calls run in parallel.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        url: { type: 'string', description: 'URL to visit' },
-        goal: { type: 'string', description: 'What to accomplish on this site' },
-        extract_schema: {
-          type: 'object',
-          description: 'JSON schema describing the data structure to extract',
-        },
-        timeout_seconds: {
-          type: 'number',
-          description: 'Timeout in seconds (default 60)',
-        },
-        agent_label: {
-          type: 'string',
-          description: 'Display name for this agent shown to user',
-        },
-      },
-      required: ['url', 'goal'],
-    },
-  },
-  {
-    name: 'dispatch_agents',
-    description:
-      'Launch multiple browser sub-agents in parallel (max 10). Each visits a different site.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        agents: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              agent_label: { type: 'string' },
-              url: { type: 'string' },
-              goal: { type: 'string' },
-              extract_schema: { type: 'object' },
-            },
-            required: ['url', 'goal'],
-          },
-          description: 'Array of agent configurations',
-        },
-      },
-      required: ['agents'],
-    },
-  },
-  {
     name: 'get_location',
     description: "Get the user's approximate location from their IP address.",
     input_schema: {
@@ -95,3 +31,29 @@ export const toolDefinitions: Anthropic.Tool[] = [
     },
   },
 ];
+
+// Server-side tools (Anthropic handles execution)
+// Use 20250305/20250910 versions for broad model compatibility
+// Use 20260209 versions for Sonnet 4.6+ / Opus 4.6 (adds dynamic filtering)
+export function getServerTools(model: string) {
+  const isNew = model.includes('sonnet-4-6') || model.includes('opus-4-6') ||
+    model.includes('sonnet-4-5') || model.includes('opus-4-5') ||
+    model === 'claude-sonnet-4-6' || model === 'claude-opus-4-6';
+
+  if (isNew) {
+    return [
+      { type: 'web_search_20260209' as const, name: 'web_search' as const },
+      { type: 'web_fetch_20260209' as const, name: 'web_fetch' as const },
+    ];
+  }
+
+  return [
+    { type: 'web_search_20250305' as const, name: 'web_search' as const },
+    { type: 'web_fetch_20250910' as const, name: 'web_fetch' as const },
+  ];
+}
+
+// Combined tools array for the API call
+export function getAllTools(model: string) {
+  return [...userTools, ...getServerTools(model)];
+}
