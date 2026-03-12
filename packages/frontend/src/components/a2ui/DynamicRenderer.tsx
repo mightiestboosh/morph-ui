@@ -68,30 +68,7 @@ function useFormContext() {
 // Animation context — tracks stagger index for entrance animations
 // ---------------------------------------------------------------------------
 
-interface AnimationContextValue {
-  getIndex: () => number;
-}
 
-const AnimationContext = React.createContext<AnimationContextValue | null>(null);
-
-function useAnimationIndex(): number {
-  const ctx = React.useContext(AnimationContext);
-  const indexRef = React.useRef<number | null>(null);
-  if (indexRef.current === null) {
-    indexRef.current = ctx ? ctx.getIndex() : 0;
-  }
-  return indexRef.current;
-}
-
-// Components that are "leaf" interactive/display elements and should animate individually
-const animatableTypes = new Set([
-  'Input', 'Textarea', 'Select', 'Checkbox', 'RadioGroup', 'Slider',
-  'Calendar', 'Switch', 'NumberInput', 'Combobox', 'DateRangePicker',
-  'Toggle', 'ToggleGroup', 'Button', 'Text', 'Image', 'Badge', 'Avatar',
-  'Progress', 'Alert', 'DataTable', 'Chart', 'MapView', 'StarRating',
-  'Card', 'Table', 'Skeleton', 'Spinner',
-  '_SendButton',
-]);
 
 // ---------------------------------------------------------------------------
 // Portal dropdown — renders floating menus outside the overflow context
@@ -156,20 +133,32 @@ function renderChildren(
 }
 
 // Gap helper -- converts a number gap prop to a Tailwind gap class (minimum gap-3 = 12px)
-function gapClass(gap?: unknown, minGap?: number): string {
-  const floor = minGap ?? 3;
-  if (gap === undefined || gap === null) return 'gap-5';
-  const n = Number(gap);
-  if (Number.isNaN(n)) return 'gap-5';
-  if (n <= 0) return 'gap-5'; // enforce minimum
-  if (n < floor) return `gap-${floor}`;
-  return `gap-${n}`;
+// Returns inline style for gap — avoids Tailwind JIT class issues
+function gapStyle(gap?: unknown, minPx?: number): React.CSSProperties {
+  const floor = minPx ?? 12; // default minimum 12px
+  let px: number;
+  if (gap === undefined || gap === null) {
+    px = 20;
+  } else {
+    const n = Number(gap);
+    if (Number.isNaN(n) || n <= 0) {
+      px = 20;
+    } else if (n <= 20) {
+      // Tailwind scale values (e.g. 4 = 1rem = 16px) — convert to px
+      px = n * 4;
+    } else {
+      // Already in pixels
+      px = n;
+    }
+  }
+  if (px < floor) px = floor;
+  return { gap: `${px}px` };
 }
 
-// Returns a minimum gap of 5 when children contain Cards
-function gapForChildren(gap: unknown, children?: ComponentNode[]): string {
+// Returns generous gap when children contain Cards
+function gapForChildren(gap: unknown, children?: ComponentNode[]): React.CSSProperties {
   const hasCards = children?.some((c) => c.type === 'Card');
-  return gapClass(gap, hasCards ? 5 : undefined);
+  return gapStyle(gap, hasCards ? 24 : undefined);
 }
 
 // Normalize options: handles both string[] and {label, value}[]
@@ -190,7 +179,7 @@ function normalizeOptions(raw: unknown): Array<{ label: string; value: string }>
 
 function ColumnComponent({ node, onAction }: DynamicRendererProps) {
   return (
-    <div className={cn('flex flex-col', gapForChildren(node.gap, node.children))}>
+    <div className="flex flex-col" style={gapForChildren(node.gap, node.children)}>
       {renderChildren(node.children, onAction)}
     </div>
   );
@@ -219,8 +208,8 @@ function RowComponent({ node, onAction }: DynamicRendererProps) {
     );
     return (
       <div
-        className={cn('grid', align, gapForChildren(node.gap, children))}
-        style={{ gridTemplateColumns: templateParts.join(' ') }}
+        className={cn('grid', align)}
+        style={{ gridTemplateColumns: templateParts.join(' '), ...gapForChildren(node.gap, children) }}
       >
         {children.map((child, i) => (
           <div key={child.id ?? i} className="min-w-0">
@@ -234,7 +223,7 @@ function RowComponent({ node, onAction }: DynamicRendererProps) {
   // Standard flex row for non-mixed content
   const wrap = node.wrap === false ? '' : 'flex-wrap';
   return (
-    <div className={cn('flex flex-row', wrap, align, gapForChildren(node.gap, children))}>
+    <div className={cn('flex flex-row', wrap, align)} style={gapForChildren(node.gap, children)}>
       {children.map((child, i) => (
         <div key={child.id ?? i}>
           <DynamicRendererInner node={child} onAction={onAction} />
@@ -250,8 +239,8 @@ function GridComponent({ node, onAction }: DynamicRendererProps) {
   const align = alignMap[node.align as string] ?? 'items-stretch';
   return (
     <div
-      className={cn('grid', align, gapForChildren(node.gap, node.children))}
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      className={cn('grid', align)}
+      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, ...gapForChildren(node.gap, node.children) }}
     >
       {renderChildren(node.children, onAction)}
     </div>
@@ -412,7 +401,7 @@ function AccordionItemComponent({ node, onAction }: DynamicRendererProps) {
 }
 
 function SeparatorComponent() {
-  return <hr className="border-border my-3" />;
+  return <hr className="border-border/50 my-1" />;
 }
 
 // ---------------------------------------------------------------------------
@@ -1054,13 +1043,17 @@ function BadgeComponent({ node }: DynamicRendererProps) {
   const variant = (node.variant as string) ?? 'default';
   const content = (node.content as string) ?? (node.label as string) ?? '';
 
+  // Don't render empty badges — they appear as black bars
+  if (!content.trim()) return null;
+
   const variants: Record<string, string> = {
-    default: 'bg-primary text-primary-foreground',
+    default: 'bg-muted text-foreground',
     secondary: 'bg-muted text-foreground',
     outline: 'border border-border text-foreground bg-white/60',
     success: 'bg-green-100 text-green-800',
     warning: 'bg-yellow-100 text-yellow-800',
     destructive: 'bg-red-100 text-red-800',
+    primary: 'bg-primary text-primary-foreground',
   };
 
   return (
@@ -1118,9 +1111,9 @@ function ProgressComponent({ node }: DynamicRendererProps) {
           <span className="text-muted-foreground">{value}%</span>
         </div>
       )}
-      <div className="w-full h-2 bg-border rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
         <div
-          className="h-full bg-primary rounded-full transition-all"
+          className="h-full bg-foreground/60 rounded-full transition-all"
           style={{ width: `${value}%` }}
         />
       </div>
@@ -2469,24 +2462,11 @@ function resolveComponent(type: string): React.FC<DynamicRendererProps> | undefi
 
 function DynamicRendererInner({ node, onAction }: DynamicRendererProps) {
   const Component = resolveComponent(node.type);
-  const shouldAnimate = animatableTypes.has(node.type) || animatableTypes.has(node.type.charAt(0).toUpperCase() + node.type.slice(1));
-  const staggerIndex = useAnimationIndex();
 
   if (!Component) {
     return (
       <div className="border border-yellow-300 bg-yellow-50 rounded-lg px-3 py-2 text-xs text-yellow-800">
         Unknown component type: <code className="font-mono">{node.type}</code>
-      </div>
-    );
-  }
-
-  if (shouldAnimate) {
-    return (
-      <div
-        className="a2ui-enter"
-        style={{ animationDelay: `${staggerIndex * 50}ms` }}
-      >
-        <Component node={node} onAction={onAction} />
       </div>
     );
   }
@@ -2632,27 +2612,19 @@ export function DynamicRenderer({ node, onAction, formRef }: DynamicRendererProp
   }), [values, node]);
 
   // Stagger counter for entrance animations
-  const counterRef = React.useRef(0);
-  counterRef.current = 0; // reset on each render
-  const animCtx = React.useMemo(() => ({
-    getIndex: () => counterRef.current++,
-  }), []);
-
   return (
-    <AnimationContext.Provider value={animCtx}>
-      <FormContext.Provider value={contextValue}>
-        <DynamicRendererInner
-          node={strippedNode}
-          onAction={(action, data) => {
-            if (action === '__send__') {
-              handleSend();
-            } else if (onAction) {
-              onAction(action, data);
-            }
-          }}
-        />
-      </FormContext.Provider>
-    </AnimationContext.Provider>
+    <FormContext.Provider value={contextValue}>
+      <DynamicRendererInner
+        node={strippedNode}
+        onAction={(action, data) => {
+          if (action === '__send__') {
+            handleSend();
+          } else if (onAction) {
+            onAction(action, data);
+          }
+        }}
+      />
+    </FormContext.Provider>
   );
 }
 
