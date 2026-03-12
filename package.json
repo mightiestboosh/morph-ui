@@ -1,0 +1,16 @@
+{
+  "name": "a2ui-chat",
+  "private": true,
+  "workspaces": [
+    "packages/frontend",
+    "packages/backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n fe,be -c cyan,green \"npm run dev -w packages/frontend\" \"npm run dev -w packages/backend\"",
+    "build": "npm run build -w packages/backend && npm run build -w packages/frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
